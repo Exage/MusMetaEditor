@@ -1,3 +1,5 @@
+import 'server-only'
+
 import NodeID3 from 'node-id3'
 import { TrackMetadata } from '@/app/shared/interface'
 import { getFileExtension } from './audio-file.utils'
@@ -81,7 +83,7 @@ const buildId3Tags = async (
     type: {
       id: 3,
     },
-    description: cover.description,
+    description: cover.description ?? '',
     imageBuffer: coverBuffer,
   }
 

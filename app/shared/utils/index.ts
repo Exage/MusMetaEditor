@@ -1,5 +1,8 @@
-export { getFileExtension, getSupportedAudioExtensions, isSupportedAudioFile } from './audio-file.utils'
-export { readAudioMetadata } from './track-metadata.utils'
-export { writeAudioMetadata } from './track-metadata-write.utils'
+// Shared barrel for universal and browser-safe utilities only.
+export {
+  getFileExtension,
+  getSupportedAudioExtensions,
+  isSupportedAudioFile,
+} from './audio-file.utils'
 export { parseTrackMetadataFromFormData } from './track-metadata-form.utils'
-export { readAudioCover } from './track-cover.utils'
+export { mergeClassNames } from './merge-class-names.utils'

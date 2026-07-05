@@ -1,3 +1,5 @@
+import 'server-only'
+
 import { parseBlob } from 'music-metadata'
 import { TrackCover } from '@/app/shared/interface'
 

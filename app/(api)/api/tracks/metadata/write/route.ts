@@ -3,8 +3,8 @@ import {
   getSupportedAudioExtensions,
   isSupportedAudioFile,
   parseTrackMetadataFromFormData,
-  writeAudioMetadata,
 } from '@/app/shared/utils'
+import { writeAudioMetadata } from '@/app/shared/utils/track-metadata-write.utils'
 import {
   MAX_AUDIO_FILE_SIZE,
   MAX_COVER_FILE_SIZE,
