@@ -1,11 +1,18 @@
 'use client'
 
+import Image from 'next/image'
 import { Container } from '@/app/shared/components/container'
 import { useHomeScreenHook } from './home.hook'
 
 export function Home() {
-  const { handleFileChange, handleFormSubmit, handleTrackClear, inputRef, selectedFile } =
-    useHomeScreenHook()
+  const {
+    handleFileChange,
+    handleFormSubmit,
+    handleTrackClear,
+    inputRef,
+    result,
+    selectedFile,
+  } = useHomeScreenHook()
 
   return (
     <Container>
@@ -37,6 +44,19 @@ export function Home() {
           </button>
         </div>
       </form>
+
+      {result?.cover?.previewUrl && (
+        <div className="mt-6">
+          <Image
+            alt={result.cover.description ?? 'Track cover'}
+            className="rounded-lg"
+            height={256}
+            src={result.cover.previewUrl}
+            unoptimized
+            width={256}
+          />
+        </div>
+      )}
     </Container>
   )
 }

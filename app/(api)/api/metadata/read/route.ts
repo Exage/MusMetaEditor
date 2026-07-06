@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { ApiResponse, TrackMetadataFormValues } from '@/app/shared/interface'
+import { TrackMetadataFormValues } from '@/app/shared/interface'
+import type { IApiResponse } from '@/app/shared/api/types'
 import { getSupportedAudioExtensions, isSupportedAudioFile } from '@/app/shared/utils'
 import { readAudioCover } from '@/app/shared/utils/track-cover.utils'
 import { readAudioMetadata } from '@/app/shared/utils/track-metadata.utils'
 import { MAX_AUDIO_FILE_SIZE } from '@/app/shared/constants'
 
-export async function POST(request: NextRequest): Promise<ApiResponse<TrackMetadataFormValues>> {
+export async function POST(
+  request: NextRequest
+): Promise<NextResponse<IApiResponse<TrackMetadataFormValues>>> {
   const formData = await request.formData()
 
   const audioFile = formData.get('file')

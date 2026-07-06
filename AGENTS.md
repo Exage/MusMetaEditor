@@ -35,8 +35,8 @@ app/
         page.tsx                  # /some-route/<slug> route
   (api)/api/
     health/route.ts               # GET /api/health
-    tracks/metadata/read/route.ts # POST upload file, returns metadata + cover
-    tracks/metadata/write/route.ts# POST upload file + metadata JSON, returns modified audio
+    metadata/read/route.ts        # POST /api/metadata/read, upload file, returns metadata + cover
+    metadata/write/route.ts       # POST /api/metadata/write, upload file + metadata JSON, returns modified audio
   screens/
     some-screen/
       index.ts
@@ -45,8 +45,12 @@ app/
       components/                 # optional
       lib/                        # optional
   shared/
+    api/
+      requests/                  # direct endpoint calls, no generic overloaded client
+      types/                     # API request/response contracts
+      lib/                       # internal API parsing/error/file helpers
     constants/                    # file-limits, audio-formats (MP3 only), api-routes
-    interface/                    # TrackMetadata, TrackCover, ApiResponse types
+    interface/                    # domain interfaces such as TrackMetadata and TrackCover
     utils/                        # audio-file, metadata read/write, cover, form parsing
 ```
 
@@ -58,6 +62,26 @@ app/
 - No `.ts`/`.tsx` extensions on imports — `moduleResolution: "bundler"` handles it.
 - API routes use the `(api)` route group — does not affect URL path.
 - File and folder names use `kebab-case` across the whole project, not `camelCase`.
+
+## Shared API structure
+
+Client-side API access lives under `app/shared/api/`.
+
+```
+app/shared/api/
+  requests/  # exported endpoint functions such as readTrackMetadata
+  types/     # request body, response body, and shared API response types
+  lib/       # internal helpers for response parsing, errors, and file downloads
+```
+
+Rules:
+
+- Keep endpoint functions in `requests/` explicit: each function should call `fetch` directly with its route, method, and body.
+- Do not reintroduce a broad generic API client for request construction unless multiple endpoints prove the duplication is real.
+- Shared API response body types belong in `types/` and must not depend on `NextResponse`.
+- Route handlers may type their return values with `NextResponse<...>` locally, using shared response body types from `app/shared/api/types`.
+- Put only small reusable implementation helpers in `lib/`, such as parsing JSON API responses, extracting error messages, or parsing downloaded file metadata.
+- UI code should import endpoint functions from `requests/`, not from low-level helpers.
 
 ## Pages / screens structure
 
