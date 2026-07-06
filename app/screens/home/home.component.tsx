@@ -5,14 +5,8 @@ import { Container } from '@/app/shared/components/container'
 import { useHomeScreenHook } from './home.hook'
 
 export function Home() {
-  const {
-    handleFileChange,
-    handleFormSubmit,
-    handleTrackClear,
-    inputRef,
-    result,
-    selectedFile,
-  } = useHomeScreenHook()
+  const { handleFileChange, handleFormSubmit, handleTrackClear, inputRef, result, selectedFile } =
+    useHomeScreenHook()
 
   return (
     <Container>
