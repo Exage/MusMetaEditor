@@ -33,10 +33,7 @@ app/
       page.tsx                    # /some-route route
       [slug]/
         page.tsx                  # /some-route/<slug> route
-  (api)/api/
-    health/route.ts               # GET /api/health
-    metadata/read/route.ts        # POST /api/metadata/read, upload file, returns metadata + cover
-    metadata/write/route.ts       # POST /api/metadata/write, upload file + metadata JSON, returns modified audio
+  (api)/api/                      # API routes; see the `api-routes` skill for endpoint details
   screens/
     some-screen/
       index.ts
@@ -62,6 +59,22 @@ app/
 - No `.ts`/`.tsx` extensions on imports — `moduleResolution: "bundler"` handles it.
 - API routes use the `(api)` route group — does not affect URL path.
 - File and folder names use `kebab-case` across the whole project, not `camelCase`.
+
+## Skills
+
+Project-specific OpenCode skills live under `.opencode/skills/<name>/SKILL.md`.
+
+Use these skills when relevant:
+
+- `code-organization` — for code structure, refactoring, function extraction, naming, comments, and avoiding unnecessary abstraction.
+- `project-structure` — when deciding where files should live.
+- `client-server-boundary` — when working with server-only code, shared utilities, barrels, or client imports.
+- `api-routes` — when creating or changing API route handlers and client API request wrappers.
+- `screens` — when creating or changing browser routes, screens, hooks, and screen-local components.
+- `audio-metadata` — when reading, writing, validating, or transforming MP3 metadata and covers.
+
+If several skills match the task, use all relevant skills before editing code.
+Do not ignore skills when the task touches their area.
 
 ## Shared API structure
 
@@ -105,7 +118,7 @@ app/screens/<name>/
 app/
   (web)/
     help/
-      page.tsx          # import { Help } from '@/app/screens/help'; export default ...
+      page.tsx          # import { HelpScreen } from '@/app/screens/help'; export default ...
   screens/
     help/
       index.ts
@@ -122,6 +135,7 @@ app/
 Rules:
 
 - `page.tsx` never contains JSX beyond `<ScreenComponent />`.
+- Screen component names use the `Screen` suffix, for example `HomeScreen` or `HelpScreen`.
 - Hooks without JSX live in `.ts`, not `.tsx`.
 - Screen hooks use the `Hook` suffix in the function name, for example `useHomeScreenHook` or `useHelpScreenHook`.
 - Keep the default screen structure minimal: start with `<name>.component.tsx` and `<name>.hook.ts`.
