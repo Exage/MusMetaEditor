@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": "./.tmp/metadata-tests",
+    "rootDir": ".",
+    "incremental": false,
+    "isolatedModules": false,
+    "paths": {}
+  },
+  "include": [
+    "tests/metadata/**/*.ts",
+    "app/shared/utils/audio-file.utils.ts",
+    "app/shared/utils/track-cover-normalize.utils.ts",
+    "app/shared/utils/track-metadata-write.utils.ts",
+    "app/shared/constants/**/*.ts",
+    "app/shared/interface/**/*.ts"
+  ],
+  "exclude": ["node_modules", ".next"]
+}

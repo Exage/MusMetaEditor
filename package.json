@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:metadata": "tsc -p tsconfig.metadata-tests.json && NODE_PATH=tests/metadata/stubs node --test .tmp/metadata-tests/tests/metadata/track-metadata-write.test.js",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
@@ -18,6 +19,7 @@
     "node-id3": "^0.2.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "sharp": "^0.34.5",
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {

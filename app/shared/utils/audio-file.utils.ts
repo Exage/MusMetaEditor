@@ -1,4 +1,4 @@
-import { SUPPORTED_AUDIO_FORMATS } from '@/app/shared/constants'
+import { SUPPORTED_AUDIO_FORMATS } from '../constants'
 
 export const getFileExtension = (fileName: string): string => {
   const dotIndex = fileName.lastIndexOf('.')

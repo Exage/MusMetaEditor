@@ -1,8 +1,12 @@
 import 'server-only'
 
 import NodeID3 from 'node-id3'
-import { TrackMetadata } from '@/app/shared/interface'
+import type { TrackMetadata } from '../interface'
 import { getFileExtension } from './audio-file.utils'
+import {
+  normalizeCoverForMp3Embedding,
+  type NormalizedEmbeddedCover,
+} from './track-cover-normalize.utils'
 
 type CoverInput = {
   file: File
@@ -12,6 +16,8 @@ type CoverInput = {
 type WriteAudioMetadataOptions = {
   removeCover?: boolean
 }
+
+type EmbeddedId3Image = Exclude<NonNullable<NodeID3.Tags['image']>, string>
 
 const toStringValue = (value?: string | number): string | undefined => {
   if (value === undefined) {
@@ -34,10 +40,13 @@ const buildTrackPosition = (number?: number, total?: number): string | undefined
   return number !== undefined ? `${number}` : `0/${total}`
 }
 
-const buildId3Tags = async (
+const isEmbeddedId3Image = (value: NodeID3.Tags['image']): value is EmbeddedId3Image =>
+  typeof value === 'object' && value !== null && 'imageBuffer' in value
+
+const buildId3Tags = (
   metadata: Partial<TrackMetadata>,
-  cover?: CoverInput
-): Promise<NodeID3.Tags> => {
+  cover?: NormalizedEmbeddedCover
+): NodeID3.Tags => {
   const tags: NodeID3.Tags = {}
   const assignIfDefined = <K extends keyof NodeID3.Tags>(
     key: K,
@@ -72,22 +81,47 @@ const buildId3Tags = async (
       : undefined
   )
 
-  if (!cover) {
-    return tags
-  }
-
-  const coverBuffer = Buffer.from(await cover.file.arrayBuffer())
-
-  tags.image = {
-    mime: cover.file.type || 'image/jpeg',
-    type: {
-      id: 3,
-    },
-    description: cover.description ?? '',
-    imageBuffer: coverBuffer,
+  if (cover) {
+    tags.image = {
+      mime: cover.mime,
+      type: {
+        id: 3,
+      },
+      description: cover.description,
+      imageBuffer: cover.imageBuffer,
+    }
   }
 
   return tags
+}
+
+const resolveMp3Cover = async (
+  sourceBuffer: Buffer,
+  cover?: CoverInput,
+  options?: WriteAudioMetadataOptions
+): Promise<NormalizedEmbeddedCover | undefined> => {
+  if (options?.removeCover) {
+    return undefined
+  }
+
+  if (cover) {
+    const uploadedCoverBuffer = Buffer.from(await cover.file.arrayBuffer())
+    return normalizeCoverForMp3Embedding(uploadedCoverBuffer)
+  }
+
+  const existingTags = NodeID3.read(sourceBuffer) as NodeID3.Tags
+
+  if (!isEmbeddedId3Image(existingTags.image)) {
+    return undefined
+  }
+
+  const existingCoverBuffer = existingTags.image.imageBuffer
+
+  if (!existingCoverBuffer) {
+    return undefined
+  }
+
+  return normalizeCoverForMp3Embedding(Buffer.from(existingCoverBuffer))
 }
 
 const writeMp3Metadata = async (
@@ -97,27 +131,24 @@ const writeMp3Metadata = async (
   options?: WriteAudioMetadataOptions
 ): Promise<Buffer> => {
   const sourceBuffer = Buffer.from(await file.arrayBuffer())
-  const tags = await buildId3Tags(metadata, cover)
+  const resolvedCover = await resolveMp3Cover(sourceBuffer, cover, options)
+  const tags = buildId3Tags(metadata, resolvedCover)
 
-  if (options?.removeCover) {
-    const existingTags = NodeID3.read(sourceBuffer) as NodeID3.Tags
-    delete existingTags.raw
-    delete existingTags.image
+  if (Object.keys(tags).length === 0) {
+    const stripped = (
+      NodeID3 as typeof NodeID3 & {
+        removeTagsFromBuffer(buffer: Buffer): Buffer | false
+      }
+    ).removeTagsFromBuffer(sourceBuffer)
 
-    const nextTags: NodeID3.Tags = {
-      ...existingTags,
-      ...tags,
-    }
-    const rewritten = NodeID3.write(nextTags, sourceBuffer)
-
-    if (rewritten instanceof Error || !Buffer.isBuffer(rewritten)) {
-      throw new Error('Failed to remove cover from audio metadata')
+    if (!Buffer.isBuffer(stripped)) {
+      throw new Error('Failed to strip audio metadata')
     }
 
-    return rewritten
+    return stripped
   }
 
-  const result = NodeID3.update(tags, sourceBuffer)
+  const result = NodeID3.write(tags, sourceBuffer)
 
   if (result instanceof Error || !Buffer.isBuffer(result)) {
     throw new Error('Failed to write audio metadata')
