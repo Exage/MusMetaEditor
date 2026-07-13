@@ -14,6 +14,12 @@ import {
 const isSupportedCoverMimeType = (mimeType: string): boolean =>
   (SUPPORTED_COVER_MIME_TYPES as readonly string[]).includes(mimeType)
 
+const getContentDispositionFileName = (fileName: string) => {
+  const fallbackFileName = fileName.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_')
+
+  return `attachment; filename="${fallbackFileName || 'track.mp3'}"; filename*=UTF-8''${encodeURIComponent(fileName)}`
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const formData = await request.formData()
   const audioFile = formData.get('file')
@@ -110,7 +116,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       status: 200,
       headers: {
         'Content-Type': contentType,
-        'Content-Disposition': `attachment; filename="${downloadName}"`,
+        'Content-Disposition': getContentDispositionFileName(downloadName),
       },
     })
   } catch (error) {

@@ -199,13 +199,13 @@ curl -X POST http://localhost:3000/api/metadata/batch/write \
 
 ## Limitations
 
-| Parameter | Limit |
-|---|---|
-| Max files per batch | 20 |
-| Max size per audio file | 20 MB |
-| Max total batch size | 200 MB |
-| Max cover size | 5 MB |
-| Supported audio formats | `.mp3` |
+| Parameter               | Limit           |
+| ----------------------- | --------------- |
+| Max files per batch     | 20              |
+| Max size per audio file | 20 MB           |
+| Max total batch size    | 200 MB          |
+| Max cover size          | 5 MB            |
+| Supported audio formats | `.mp3`          |
 | Supported cover formats | JPEG, PNG, WebP |
 
 ## Client API (TypeScript)
