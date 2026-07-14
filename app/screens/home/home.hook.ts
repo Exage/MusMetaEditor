@@ -1,224 +1,436 @@
-import { useEffect, useRef, useState } from 'react'
-import { readTrackMetadata, writeTrackMetadata } from '@/app/shared/api/requests'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  readTracksMetadataBatch,
+  writeTracksMetadataBatch,
+} from '@/app/shared/api/requests/tracks-metadata.requests'
 import type { TrackMetadataFormValues } from '@/app/shared/interface'
-import { areTrackFormValuesEqual } from './lib/track-form-values'
+import type { TTrackCoverMode } from '@/app/shared/api/types'
+import {
+  MAX_AUDIO_FILE_SIZE,
+  MAX_AUDIO_FILES_PER_BATCH,
+  MAX_AUDIO_BATCH_TOTAL_SIZE,
+} from '@/app/shared/constants'
 
-export function useHomeScreenHook() {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [result, setResult] = useState<TrackMetadataFormValues | null>(null)
-  const [draft, setDraft] = useState<TrackMetadataFormValues | null>(null)
-  const [hasChanges, setHasChanges] = useState<boolean>(false)
-  const [isReading, setIsReading] = useState<boolean>(false)
-  const [isSaving, setIsSaving] = useState<boolean>(false)
-  const [error, setError] = useState<string | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const coverInputRef = useRef<HTMLInputElement>(null)
+const ACCEPTED_AUDIO_MIME_TYPES = new Set(['audio/mpeg', 'audio/mp3'])
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const nextFile = event.currentTarget.files?.[0] ?? null
+export type TrackItem = {
+  id: string
+  file: File
+  fileName: string
+  fileSize: number
+  metadata: TrackMetadataFormValues['metadata'] | null
+  initialMetadata: TrackMetadataFormValues['metadata'] | null
+  cover: TrackMetadataFormValues['cover'] | null
+  error: string | null
+  errorSource: 'read' | 'write' | null
+  isMetadataOpen: boolean
+  status: 'selected' | 'reading' | 'read' | 'error'
+}
 
-    setSelectedFile(nextFile)
-    setResult(null)
-    setDraft(null)
-    setHasChanges(false)
-    setError(null)
+let trackIdCounter = 0
+
+const createTrackFromFile = (file: File, status: TrackItem['status'] = 'selected'): TrackItem => {
+  trackIdCounter += 1
+
+  return {
+    id: `track_${Date.now()}_${trackIdCounter}`,
+    file,
+    fileName: file.name,
+    fileSize: file.size,
+    metadata: null,
+    initialMetadata: null,
+    cover: null,
+    error: null,
+    errorSource: null,
+    isMetadataOpen: false,
+    status,
+  }
+}
+
+const getTrackFileValidationError = (
+  file: File,
+  nextTotalSizeAfterAdd: number,
+  candidateIndex: number
+) => {
+  if (!ACCEPTED_AUDIO_MIME_TYPES.has(file.type) && !file.name.toLowerCase().endsWith('.mp3')) {
+    return `"${file.name}" is not a supported audio format`
   }
 
-  const handleTrackRead = async () => {
-    if (!selectedFile) {
+  if (file.size > MAX_AUDIO_FILE_SIZE) {
+    return `"${file.name}" is too large`
+  }
+
+  if (nextTotalSizeAfterAdd > MAX_AUDIO_BATCH_TOTAL_SIZE) {
+    return `"${file.name}" would exceed the batch size limit`
+  }
+
+  if (candidateIndex + 1 > MAX_AUDIO_FILES_PER_BATCH) {
+    return 'Track limit exceeded'
+  }
+
+  return null
+}
+
+export function useHomeScreenHook() {
+  const [tracks, setTracks] = useState<TrackItem[]>([])
+  const [coverMode, setCoverMode] = useState<TTrackCoverMode>('keep-per-track')
+  const [batchCover, setBatchCover] = useState<TrackMetadataFormValues['cover'] | null>(null)
+  const [, setPendingReadCount] = useState(0)
+  const [isSaving, setIsSaving] = useState<boolean>(false)
+  const [batchError, setBatchError] = useState<string | null>(null)
+
+  const inputRef = useRef<HTMLInputElement>(null)
+  const batchCoverInputRef = useRef<HTMLInputElement>(null)
+
+  const readTracks = useMemo(() => tracks.filter((track) => track.status === 'read'), [tracks])
+  const canSave =
+    readTracks.length > 0 && (coverMode !== 'replace-all' || Boolean(batchCover?.file))
+
+  const readTracksBatch = async (tracksToRead: TrackItem[]) => {
+    if (tracksToRead.length === 0) {
       return
     }
 
-    setIsReading(true)
-    setError(null)
-    setResult(null)
-    setDraft(null)
+    setPendingReadCount((count) => count + 1)
 
     try {
       const formData = new FormData()
-      formData.append('file', selectedFile)
+      const trackIdsByRequestIndex = tracksToRead.map((track) => track.id)
 
-      const metadata = await readTrackMetadata(formData)
+      for (const track of tracksToRead) {
+        formData.append('files', track.file)
+      }
 
-      setResult(metadata)
-      setDraft(metadata)
-      setHasChanges(false)
+      const response = await readTracksMetadataBatch(formData)
+
+      setTracks((prev) =>
+        prev.map((track) => {
+          const requestIndex = trackIdsByRequestIndex.indexOf(track.id)
+
+          if (requestIndex === -1) {
+            return track
+          }
+
+          const successItem = response.tracks.find((item) => item.index === requestIndex)
+          const errorItem = response.errors.find((item) => item.index === requestIndex)
+
+          if (successItem) {
+            return {
+              ...track,
+              metadata: successItem.metadata,
+              initialMetadata: successItem.metadata,
+              cover: successItem.cover,
+              error: null,
+              errorSource: null,
+              status: 'read' as const,
+            }
+          }
+
+          if (errorItem) {
+            return {
+              ...track,
+              error: errorItem.error,
+              errorSource: 'read' as const,
+              status: 'error' as const,
+            }
+          }
+
+          return track
+        })
+      )
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to read metadata'
 
-      setError(message)
+      setBatchError(message)
+
+      setTracks((prev) =>
+        prev.map((track) =>
+          tracksToRead.some((toRead) => toRead.id === track.id)
+            ? {
+                ...track,
+                error: message,
+                errorSource: 'read' as const,
+                status: 'error' as const,
+              }
+            : track
+        )
+      )
     } finally {
-      setIsReading(false)
+      setPendingReadCount((count) => Math.max(0, count - 1))
     }
   }
 
-  const handleTrackClear = () => {
-    setSelectedFile(null)
-    setResult(null)
-    setDraft(null)
-    setHasChanges(false)
-    setError(null)
+  const handleAddTracks = (files: File[]) => {
+    const currentTotalSize = tracks.reduce((size, track) => size + track.file.size, 0)
+    let pendingTotalSize = currentTotalSize
+    let candidateIndex = tracks.length
+    const errors: string[] = []
+    const acceptedTracks: TrackItem[] = []
 
-    if (inputRef.current) {
-      inputRef.current.value = ''
-    }
-  }
-
-  const handleDraftMetadataChange = <Field extends keyof TrackMetadataFormValues['metadata']>(
-    field: Field,
-    value: TrackMetadataFormValues['metadata'][Field]
-  ) => {
-    if (!draft) {
-      return
-    }
-
-    const nextDraft = {
-      ...draft,
-      metadata: {
-        ...draft.metadata,
-        [field]: value,
-      },
-    }
-
-    setDraft(nextDraft)
-    setHasChanges(!areTrackFormValuesEqual(result, nextDraft))
-  }
-
-  useEffect(() => {
-    return () => {
-      if (draft?.cover?.previewUrl?.startsWith('blob:')) {
-        URL.revokeObjectURL(draft.cover.previewUrl)
-      }
-    }
-  }, [draft?.cover?.previewUrl])
-
-  const handleDraftCoverAdd = (file: File) => {
-    if (!draft) {
-      return
-    }
-
-    if (draft.cover?.previewUrl?.startsWith('blob:')) {
-      URL.revokeObjectURL(draft.cover.previewUrl)
-    }
-
-    const previewUrl = URL.createObjectURL(file)
-
-    const nextDraft = {
-      ...draft,
-      cover: {
+    for (const file of files) {
+      const nextTotalSizeAfterAdd = pendingTotalSize + file.size
+      const validationError = getTrackFileValidationError(
         file,
-        previewUrl,
-        mimeType: file.type as 'image/jpeg' | 'image/png' | 'image/webp',
-      },
+        nextTotalSizeAfterAdd,
+        candidateIndex
+      )
+
+      if (validationError) {
+        errors.push(validationError)
+
+        continue
+      }
+
+      acceptedTracks.push(createTrackFromFile(file, 'reading'))
+      pendingTotalSize = nextTotalSizeAfterAdd
+      candidateIndex += 1
     }
 
-    setDraft(nextDraft)
-    setHasChanges(!areTrackFormValuesEqual(result, nextDraft))
+    if (errors.length > 0) {
+      const uniqueErrors = Array.from(new Set(errors))
+
+      setBatchError(uniqueErrors.join('; '))
+    } else {
+      setBatchError(null)
+    }
+
+    if (acceptedTracks.length > 0) {
+      if (tracks.length + acceptedTracks.length === 1) {
+        setCoverMode('replace-all')
+      }
+
+      setTracks((prev) => [...prev, ...acceptedTracks])
+      void readTracksBatch(acceptedTracks)
+    }
   }
 
-  const handleDraftCoverRemove = () => {
-    if (!draft) {
-      return
-    }
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const incomingFiles = Array.from(event.currentTarget.files ?? [])
 
-    if (draft.cover?.previewUrl?.startsWith('blob:')) {
-      URL.revokeObjectURL(draft.cover.previewUrl)
-    }
-
-    const nextDraft = { ...draft, cover: undefined }
-
-    setDraft(nextDraft)
-    setHasChanges(!areTrackFormValuesEqual(result, nextDraft))
-  }
-
-  const handleCoverFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0]
-
-    if (file) {
-      handleDraftCoverAdd(file)
-    }
-
+    handleAddTracks(incomingFiles)
     event.currentTarget.value = ''
   }
 
-  const handleTrackSave = async () => {
-    if (!selectedFile || !draft) {
+  const handleTrackClear = (trackId: string) => {
+    if (tracks.filter((track) => track.id !== trackId).length === 1) {
+      setCoverMode('replace-all')
+    }
+
+    setTracks((prev) => prev.filter((track) => track.id !== trackId))
+  }
+
+  const handleTracksSave = async () => {
+    if (!canSave || isSaving) {
       return
     }
 
     setIsSaving(true)
-    setError(null)
+    setBatchError(null)
 
     try {
       const formData = new FormData()
+      const readTrackIds = readTracks.map((track) => track.id)
 
-      formData.append('file', selectedFile)
-      formData.append('metadata', JSON.stringify(draft.metadata))
-
-      if (draft.cover?.file) {
-        formData.append('cover', draft.cover.file)
-
-        if (draft.cover.description) {
-          formData.append('coverDescription', draft.cover.description)
-        }
-      } else if (result?.cover && !draft.cover) {
-        formData.append('removeCover', 'true')
+      for (const track of readTracks) {
+        formData.append('files', track.file)
       }
 
-      const downloadedFile = await writeTrackMetadata(formData)
+      formData.append(
+        'tracks',
+        JSON.stringify(
+          readTracks.map((track, index) => ({
+            index,
+            metadata: track.metadata,
+          }))
+        )
+      )
+
+      formData.append('coverMode', coverMode)
+
+      if (coverMode === 'replace-all' && batchCover?.file) {
+        formData.append('cover', batchCover.file)
+
+        if (batchCover.description) {
+          formData.append('coverDescription', batchCover.description)
+        }
+      }
+
+      const downloadedFile = await writeTracksMetadataBatch(formData)
 
       const url = URL.createObjectURL(downloadedFile.blob)
       const link = document.createElement('a')
 
       link.href = url
-      link.download = downloadedFile.fileName || selectedFile.name
+      link.download = downloadedFile.fileName ?? 'album.zip'
       link.click()
 
       URL.revokeObjectURL(url)
 
-      const nextFile = new File(
-        [downloadedFile.blob],
-        downloadedFile.fileName || selectedFile.name,
-        {
-          type: downloadedFile.contentType || selectedFile.type,
-        }
-      )
+      setTracks((prev) =>
+        prev.map((track) => {
+          if (!readTrackIds.includes(track.id)) {
+            return track
+          }
 
-      setSelectedFile(nextFile)
-      setResult(draft)
-      setHasChanges(false)
+          return {
+            ...track,
+            initialMetadata: track.metadata,
+            cover:
+              coverMode === 'replace-all'
+                ? batchCover
+                : coverMode === 'remove-all'
+                  ? null
+                  : track.cover,
+            error: null,
+            errorSource: null,
+          }
+        })
+      )
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to save metadata'
 
-      setError(message)
+      setBatchError(message)
     } finally {
       setIsSaving(false)
     }
   }
 
-  const handleDraftCancel = () => {
-    setDraft(result)
-    setHasChanges(false)
+  const handleTrackEditToggle = (trackId: string) => {
+    setTracks((prev) =>
+      prev.map((track) =>
+        track.id === trackId
+          ? {
+              ...track,
+              isMetadataOpen: !track.isMetadataOpen,
+            }
+          : track
+      )
+    )
   }
 
+  const handleTrackMetadataChange = (
+    trackId: string,
+    field: keyof TrackMetadataFormValues['metadata'],
+    value: TrackMetadataFormValues['metadata'][keyof TrackMetadataFormValues['metadata']]
+  ) => {
+    setTracks((prev) =>
+      prev.map((track) => {
+        if (track.id !== trackId || !track.metadata) {
+          return track
+        }
+
+        return {
+          ...track,
+          metadata: {
+            ...track.metadata,
+            [field]: value,
+          },
+        }
+      })
+    )
+  }
+
+  const handleTrackMetadataCancel = (trackId: string) => {
+    setTracks((prev) =>
+      prev.map((track) => {
+        if (track.id !== trackId || !track.initialMetadata) {
+          return track
+        }
+
+        return {
+          ...track,
+          metadata: track.initialMetadata,
+        }
+      })
+    )
+  }
+
+  const handleTrackReorder = (trackId: string, nextPosition: number) => {
+    setTracks((prev) => {
+      const currentIndex = prev.findIndex((track) => track.id === trackId)
+
+      if (currentIndex === -1) {
+        return prev
+      }
+
+      const clampedPosition = Math.max(1, Math.min(prev.length, nextPosition))
+      const nextIndex = clampedPosition - 1
+
+      if (nextIndex === currentIndex) {
+        return prev
+      }
+
+      const nextTracks = [...prev]
+      const [movedTrack] = nextTracks.splice(currentIndex, 1)
+
+      nextTracks.splice(nextIndex, 0, movedTrack)
+
+      return nextTracks
+    })
+  }
+
+  const handleCoverModeChange = (nextMode: TTrackCoverMode) => {
+    setCoverMode(nextMode)
+  }
+
+  const handleBatchCoverAdd = (file: File) => {
+    if (batchCover?.previewUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(batchCover.previewUrl)
+    }
+
+    const previewUrl = URL.createObjectURL(file)
+
+    setBatchCover({
+      file,
+      previewUrl,
+      mimeType: file.type as 'image/jpeg' | 'image/png' | 'image/webp',
+    })
+  }
+
+  const handleBatchCoverRemove = () => {
+    if (batchCover?.previewUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(batchCover.previewUrl)
+    }
+
+    setBatchCover(null)
+  }
+
+  const handleBatchCoverFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0]
+
+    if (file) {
+      handleBatchCoverAdd(file)
+    }
+
+    event.currentTarget.value = ''
+  }
+
+  useEffect(() => {
+    return () => {
+      if (batchCover?.previewUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(batchCover.previewUrl)
+      }
+    }
+  }, [batchCover?.previewUrl])
+
   return {
-    coverInputRef,
-    draft,
-    error,
-    handleCoverFileChange,
-    handleDraftCancel,
-    handleDraftCoverAdd,
-    handleDraftCoverRemove,
-    handleDraftMetadataChange,
+    batchCover,
+    batchCoverInputRef,
+    batchError,
+    canSave,
+    coverMode,
+    inputRef,
+    isSaving,
+    tracks,
+    handleBatchCoverFileChange,
+    handleBatchCoverRemove,
+    handleCoverModeChange,
     handleFileChange,
     handleTrackClear,
-    handleTrackRead,
-    handleTrackSave,
-    hasChanges,
-    inputRef,
-    isReading,
-    isSaving,
-    result,
-    selectedFile,
+    handleTrackEditToggle,
+    handleTrackMetadataCancel,
+    handleTrackMetadataChange,
+    handleTrackReorder,
+    handleTracksSave,
   }
 }
