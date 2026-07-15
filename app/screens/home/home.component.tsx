@@ -9,9 +9,13 @@ import { useHomeScreenHook } from './home.hook'
 
 export function HomeScreen() {
   const {
+    albumMetadataMode,
+    batchAlbumArtist,
+    batchAlbumTitle,
     batchCover,
     batchCoverInputRef,
     batchError,
+    batchYear,
     canSave,
     coverMode,
     inputRef,
@@ -27,6 +31,10 @@ export function HomeScreen() {
     handleTrackMetadataChange,
     handleTrackReorder,
     handleTracksSave,
+    setAlbumMetadataMode,
+    setBatchAlbumArtist,
+    setBatchAlbumTitle,
+    setBatchYear,
   } = useHomeScreenHook()
 
   return (
@@ -84,6 +92,75 @@ export function HomeScreen() {
                       />
                     </div>
                   )}
+
+                  {tracks.length > 1 && (
+                    <>
+                      <div className="flex items-center gap-4">
+                        <span className="text-sm text-gray-400">Album metadata</span>
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name="albumMetadataMode"
+                            checked={albumMetadataMode === 'per-track'}
+                            onChange={() => setAlbumMetadataMode('per-track')}
+                          />
+                          Per track
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name="albumMetadataMode"
+                            checked={albumMetadataMode === 'all-tracks'}
+                            onChange={() => setAlbumMetadataMode('all-tracks')}
+                          />
+                          Same for all tracks
+                        </label>
+                      </div>
+
+                      {albumMetadataMode === 'all-tracks' && (
+                        <div className="flex flex-col gap-3">
+                          <p className="text-sm text-gray-400">
+                            Set Album Title, Album Artist and Year for all tracks
+                          </p>
+                          <div className="grid grid-cols-2 border border-gray-500 rounded-2xl">
+                            <div className="border-r border-r-gray-500 border-b border-b-gray-500 p-2">
+                              <h3>Album Title</h3>
+                            </div>
+                            <div className="border-b border-b-gray-500">
+                              <input
+                                type="text"
+                                value={batchAlbumTitle}
+                                onChange={(event) => setBatchAlbumTitle(event.currentTarget.value)}
+                                className="w-full p-2 outline-none"
+                              />
+                            </div>
+                            <div className="border-r border-r-gray-500 border-b border-b-gray-500 p-2">
+                              <h3>Album Artist</h3>
+                            </div>
+                            <div className="border-b border-b-gray-500">
+                              <input
+                                type="text"
+                                value={batchAlbumArtist}
+                                onChange={(event) => setBatchAlbumArtist(event.currentTarget.value)}
+                                className="w-full p-2 outline-none"
+                              />
+                            </div>
+                            <div className="border-r border-r-gray-500 p-2">
+                              <h3>Year</h3>
+                            </div>
+                            <div>
+                              <input
+                                type="text"
+                                value={batchYear}
+                                onChange={(event) => setBatchYear(event.currentTarget.value)}
+                                className="w-full p-2 outline-none"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
 
                 {batchError && <p className="text-sm text-rose-400">{batchError}</p>}
@@ -95,6 +172,7 @@ export function HomeScreen() {
                       track={track}
                       index={index}
                       coverMode={coverMode}
+                      albumMetadataMode={albumMetadataMode}
                       trackCount={tracks.length}
                       onClear={handleTrackClear}
                       onEditToggle={handleTrackEditToggle}

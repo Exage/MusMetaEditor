@@ -7,10 +7,13 @@ import { TrackMetadataForm } from '../track-metadata-form'
 import { areTrackFormValuesEqual } from '../../lib/track-form-values'
 import type { TrackItem } from '../../home.hook'
 
+type TAlbumMetadataMode = 'per-track' | 'all-tracks'
+
 interface TrackCardProps {
   track: TrackItem
   index: number
   coverMode: TTrackCoverMode
+  albumMetadataMode: TAlbumMetadataMode
   onClear: (trackId: string) => void
   onEditToggle: (trackId: string) => void
   onMetadataCancel: (trackId: string) => void
@@ -27,6 +30,7 @@ export function TrackCard({
   track,
   index,
   coverMode,
+  albumMetadataMode,
   onClear,
   onEditToggle,
   onMetadataCancel,
@@ -98,6 +102,10 @@ export function TrackCard({
           <TrackMetadataForm
             draft={{ metadata: track.metadata }}
             onMetadataChange={(field, value) => onMetadataChange(track.id, field, value)}
+            disabledFields={
+              albumMetadataMode === 'all-tracks' ? ['album', 'albumArtist', 'year'] : []
+            }
+            hiddenFields={trackCount === 1 ? ['album', 'albumArtist'] : []}
           />
         )}
       </div>

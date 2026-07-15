@@ -1,13 +1,13 @@
 import 'server-only'
 
-import type { IWriteTrackMetadataBatchItem, TTrackCoverMode } from '@/app/shared/api/types'
+import type { IWriteTrackMetadataItem, TTrackCoverMode } from '@/app/shared/api/types'
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
 
-export const parseTrackMetadataBatchItems = (
+export const parseTrackMetadataItems = (
   value: FormDataEntryValue | null
-): IWriteTrackMetadataBatchItem[] | null => {
+): IWriteTrackMetadataItem[] | null => {
   if (typeof value !== 'string') {
     return null
   }
@@ -33,7 +33,7 @@ export const parseTrackMetadataBatchItems = (
       }
     }
 
-    return parsed as IWriteTrackMetadataBatchItem[]
+    return parsed as IWriteTrackMetadataItem[]
   } catch {
     return null
   }

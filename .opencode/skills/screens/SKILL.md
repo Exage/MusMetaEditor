@@ -93,6 +93,11 @@ only when the screen has UI parts that are large enough to deserve separate file
 
 Do not extract a component when it only hides two obvious lines of JSX.
 
+## Conditional rendering
+
+- Prefer `condition && <Component />` over `condition ? <Component /> : null` when there is no fallback UI.
+- Keep ternaries when both branches render meaningful UI, for example `condition ? <Image /> : <span>No cover</span>`.
+
 ## Screen-local lib
 
 Create:

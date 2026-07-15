@@ -1,75 +1,100 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { TrackMetadataFormValues } from '@/app/shared/interface'
-import type { IApiResponse } from '@/app/shared/api/types'
+import type { IApiResponse, IReadTracksMetadataResponseData } from '@/app/shared/api/types'
 import { getSupportedAudioExtensions, isSupportedAudioFile } from '@/app/shared/utils'
-import { readAudioCover } from '@/app/shared/utils/track-cover.utils'
 import { readAudioMetadata } from '@/app/shared/utils/track-metadata.utils'
-import { MAX_AUDIO_FILE_SIZE } from '@/app/shared/constants'
+import { readAudioCover } from '@/app/shared/utils/track-cover.utils'
+import { MAX_AUDIO_FILE_SIZE, MAX_AUDIO_FILES } from '@/app/shared/constants'
 
 export async function POST(
   request: NextRequest
-): Promise<NextResponse<IApiResponse<TrackMetadataFormValues>>> {
+): Promise<NextResponse<IApiResponse<IReadTracksMetadataResponseData>>> {
   const formData = await request.formData()
+  const entries = formData.getAll('files')
 
-  const audioFile = formData.get('file')
-
-  if (!(audioFile instanceof File)) {
+  if (entries.length === 0) {
     return NextResponse.json(
       {
         success: false,
-        error: 'File is required',
+        error: 'At least one file is required',
       },
       { status: 400 }
     )
   }
 
-  if (!isSupportedAudioFile(audioFile)) {
-    const extensions = getSupportedAudioExtensions()
-      .map((extension) => `.${extension}`)
-      .join(', ')
-
+  if (entries.length > MAX_AUDIO_FILES) {
     return NextResponse.json(
       {
         success: false,
+        error: `Too many files. Maximum: ${MAX_AUDIO_FILES}`,
+      },
+      { status: 400 }
+    )
+  }
+
+  const tracks: IReadTracksMetadataResponseData['tracks'] = []
+  const errors: IReadTracksMetadataResponseData['errors'] = []
+
+  for (const [index, entry] of entries.entries()) {
+    if (!(entry instanceof File)) {
+      errors.push({ index, error: 'Entry is not a file' })
+
+      continue
+    }
+
+    if (!isSupportedAudioFile(entry)) {
+      const extensions = getSupportedAudioExtensions()
+        .map((extension) => `.${extension}`)
+        .join(', ')
+
+      errors.push({
+        index,
+        fileName: entry.name,
         error: `Unsupported file format. Supported formats: ${extensions}`,
-      },
-      { status: 400 }
-    )
-  }
+      })
 
-  if (audioFile.size > MAX_AUDIO_FILE_SIZE) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: `File is too large`,
-      },
-      { status: 400 }
-    )
-  }
+      continue
+    }
 
-  try {
-    const metadata = await readAudioMetadata(audioFile)
-    const cover = await readAudioCover(audioFile)
+    if (entry.size > MAX_AUDIO_FILE_SIZE) {
+      errors.push({
+        index,
+        fileName: entry.name,
+        error: 'Audio file is too large',
+      })
 
-    return NextResponse.json(
-      {
-        success: true,
-        data: {
-          metadata,
-          cover,
-        },
-      },
-      { status: 200 }
-    )
-  } catch (error) {
-    console.error(error)
+      continue
+    }
 
-    return NextResponse.json(
-      {
-        success: false,
+    try {
+      const metadata = await readAudioMetadata(entry)
+      const cover = await readAudioCover(entry)
+
+      tracks.push({
+        index,
+        fileName: entry.name,
+        fileSize: entry.size,
+        metadata,
+        cover,
+      })
+    } catch (error) {
+      console.error(error)
+
+      errors.push({
+        index,
+        fileName: entry.name,
         error: 'Failed to read audio metadata',
-      },
-      { status: 400 }
-    )
+      })
+    }
   }
+
+  return NextResponse.json(
+    {
+      success: true,
+      data: {
+        tracks,
+        errors,
+      },
+    },
+    { status: 200 }
+  )
 }

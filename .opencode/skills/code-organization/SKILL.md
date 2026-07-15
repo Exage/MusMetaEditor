@@ -87,6 +87,11 @@ When refactoring existing code:
 - Do not add support for new audio formats unless explicitly requested.
 - Keep MP3 as the only supported audio format unless the task says otherwise.
 
+## JSX style
+
+- Prefer `condition && <Component />` over `condition ? <Component /> : null` when there is no fallback UI.
+- Keep ternaries when both branches render meaningful UI.
+
 ## Before finishing
 
 Check:

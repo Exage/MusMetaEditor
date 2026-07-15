@@ -1,15 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  readTracksMetadataBatch,
-  writeTracksMetadataBatch,
+  readTracksMetadata,
+  writeTracksMetadata,
 } from '@/app/shared/api/requests/tracks-metadata.requests'
 import type { TrackMetadataFormValues } from '@/app/shared/interface'
 import type { TTrackCoverMode } from '@/app/shared/api/types'
-import {
-  MAX_AUDIO_FILE_SIZE,
-  MAX_AUDIO_FILES_PER_BATCH,
-  MAX_AUDIO_BATCH_TOTAL_SIZE,
-} from '@/app/shared/constants'
+import { MAX_AUDIO_FILE_SIZE, MAX_AUDIO_FILES, MAX_AUDIO_TOTAL_SIZE } from '@/app/shared/constants'
 
 const ACCEPTED_AUDIO_MIME_TYPES = new Set(['audio/mpeg', 'audio/mp3'])
 
@@ -60,22 +56,27 @@ const getTrackFileValidationError = (
     return `"${file.name}" is too large`
   }
 
-  if (nextTotalSizeAfterAdd > MAX_AUDIO_BATCH_TOTAL_SIZE) {
+  if (nextTotalSizeAfterAdd > MAX_AUDIO_TOTAL_SIZE) {
     return `"${file.name}" would exceed the batch size limit`
   }
 
-  if (candidateIndex + 1 > MAX_AUDIO_FILES_PER_BATCH) {
+  if (candidateIndex + 1 > MAX_AUDIO_FILES) {
     return 'Track limit exceeded'
   }
 
   return null
 }
 
+export type TAlbumMetadataMode = 'per-track' | 'all-tracks'
+
 export function useHomeScreenHook() {
   const [tracks, setTracks] = useState<TrackItem[]>([])
   const [coverMode, setCoverMode] = useState<TTrackCoverMode>('keep-per-track')
   const [batchCover, setBatchCover] = useState<TrackMetadataFormValues['cover'] | null>(null)
-  const [, setPendingReadCount] = useState(0)
+  const [albumMetadataMode, setAlbumMetadataMode] = useState<TAlbumMetadataMode>('per-track')
+  const [batchAlbumTitle, setBatchAlbumTitle] = useState('')
+  const [batchAlbumArtist, setBatchAlbumArtist] = useState('')
+  const [batchYear, setBatchYear] = useState('')
   const [isSaving, setIsSaving] = useState<boolean>(false)
   const [batchError, setBatchError] = useState<string | null>(null)
 
@@ -91,8 +92,6 @@ export function useHomeScreenHook() {
       return
     }
 
-    setPendingReadCount((count) => count + 1)
-
     try {
       const formData = new FormData()
       const trackIdsByRequestIndex = tracksToRead.map((track) => track.id)
@@ -101,7 +100,7 @@ export function useHomeScreenHook() {
         formData.append('files', track.file)
       }
 
-      const response = await readTracksMetadataBatch(formData)
+      const response = await readTracksMetadata(formData)
 
       setTracks((prev) =>
         prev.map((track) => {
@@ -155,8 +154,6 @@ export function useHomeScreenHook() {
             : track
         )
       )
-    } finally {
-      setPendingReadCount((count) => Math.max(0, count - 1))
     }
   }
 
@@ -235,17 +232,56 @@ export function useHomeScreenHook() {
         formData.append('files', track.file)
       }
 
+      const assembleMetadata = (
+        metadata: TrackMetadataFormValues['metadata']
+      ): TrackMetadataFormValues['metadata'] => {
+        if (readTracks.length === 1) {
+          return {
+            ...metadata,
+            album: metadata.title,
+            albumArtist: metadata.artist,
+          }
+        }
+
+        if (albumMetadataMode !== 'all-tracks') {
+          return metadata
+        }
+
+        const parsedBatchYear = batchYear.trim() !== '' ? Number(batchYear) : undefined
+        const batchYearValue =
+          parsedBatchYear !== undefined && Number.isFinite(parsedBatchYear)
+            ? parsedBatchYear
+            : undefined
+
+        return {
+          ...metadata,
+          album: batchAlbumTitle,
+          albumArtist: batchAlbumArtist,
+          ...(batchYearValue !== undefined ? { year: batchYearValue } : {}),
+        }
+      }
+
       formData.append(
         'tracks',
         JSON.stringify(
           readTracks.map((track, index) => ({
             index,
-            metadata: track.metadata,
+            metadata: assembleMetadata(track.metadata),
           }))
         )
       )
 
       formData.append('coverMode', coverMode)
+
+      if (albumMetadataMode === 'all-tracks' && batchAlbumTitle.trim()) {
+        formData.append('archiveName', batchAlbumTitle.trim())
+      } else {
+        const firstAlbum = readTracks.find((track) => track.metadata?.album)?.metadata?.album
+
+        if (firstAlbum?.trim()) {
+          formData.append('archiveName', firstAlbum.trim())
+        }
+      }
 
       if (coverMode === 'replace-all' && batchCover?.file) {
         formData.append('cover', batchCover.file)
@@ -255,7 +291,7 @@ export function useHomeScreenHook() {
         }
       }
 
-      const downloadedFile = await writeTracksMetadataBatch(formData)
+      const downloadedFile = await writeTracksMetadata(formData)
 
       const url = URL.createObjectURL(downloadedFile.blob)
       const link = document.createElement('a')
@@ -272,9 +308,12 @@ export function useHomeScreenHook() {
             return track
           }
 
+          const savedMetadata = assembleMetadata(track.metadata)
+
           return {
             ...track,
-            initialMetadata: track.metadata,
+            metadata: albumMetadataMode === 'all-tracks' ? savedMetadata : track.metadata,
+            initialMetadata: savedMetadata,
             cover:
               coverMode === 'replace-all'
                 ? batchCover
@@ -414,9 +453,13 @@ export function useHomeScreenHook() {
   }, [batchCover?.previewUrl])
 
   return {
+    albumMetadataMode,
+    batchAlbumArtist,
+    batchAlbumTitle,
     batchCover,
     batchCoverInputRef,
     batchError,
+    batchYear,
     canSave,
     coverMode,
     inputRef,
@@ -432,5 +475,9 @@ export function useHomeScreenHook() {
     handleTrackMetadataChange,
     handleTrackReorder,
     handleTracksSave,
+    setAlbumMetadataMode,
+    setBatchAlbumArtist,
+    setBatchAlbumTitle,
+    setBatchYear,
   }
 }

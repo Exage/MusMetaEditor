@@ -5,6 +5,7 @@ interface TrackMetadataFieldProps {
   value: string
   onValueChange: (value: string) => void
   isLast: boolean
+  disabled?: boolean
 }
 
 export function TrackMetadataField({
@@ -12,6 +13,7 @@ export function TrackMetadataField({
   value,
   onValueChange,
   isLast,
+  disabled = false,
 }: TrackMetadataFieldProps) {
   const labelClassName = mergeClassNames(
     'border-r border-r-gray-500 p-2',
@@ -28,8 +30,12 @@ export function TrackMetadataField({
         <input
           type="text"
           value={value}
+          disabled={disabled}
           onChange={(event) => onValueChange(event.currentTarget.value)}
-          className="w-full p-2 outline-none"
+          className={mergeClassNames(
+            'w-full p-2 outline-none',
+            disabled && 'cursor-not-allowed text-gray-500 bg-gray-500/5'
+          )}
         />
       </div>
     </>

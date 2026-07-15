@@ -3,9 +3,9 @@ export type { IDownloadedFile } from './file-download.types'
 export type {
   IReadTrackMetadataResponseData,
   IWriteTrackMetadataResponseData,
-  IReadTrackMetadataBatchItem,
-  IReadTrackMetadataBatchError,
-  IReadTracksMetadataBatchResponseData,
+  IReadTrackMetadataItem,
+  IReadTrackMetadataError,
+  IReadTracksMetadataResponseData,
   TTrackCoverMode,
-  IWriteTrackMetadataBatchItem,
+  IWriteTrackMetadataItem,
 } from './tracks-metadata.types'

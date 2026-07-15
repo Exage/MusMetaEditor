@@ -1,1 +1,1 @@
-export { readTrackMetadata, writeTrackMetadata } from './tracks-metadata.requests'
+export { readTracksMetadata, writeTracksMetadata } from './tracks-metadata.requests'

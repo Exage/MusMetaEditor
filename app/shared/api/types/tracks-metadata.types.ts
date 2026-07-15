@@ -5,9 +5,7 @@ export type IReadTrackMetadataResponseData = TrackMetadataFormValues
 
 export type IWriteTrackMetadataResponseData = IDownloadedFile
 
-// --- Batch API types ---
-
-export type IReadTrackMetadataBatchItem = {
+export type IReadTrackMetadataItem = {
   index: number
   fileName: string
   fileSize: number
@@ -15,20 +13,20 @@ export type IReadTrackMetadataBatchItem = {
   cover: TrackMetadataFormValues['cover']
 }
 
-export type IReadTrackMetadataBatchError = {
+export type IReadTrackMetadataError = {
   index: number
   fileName?: string
   error: string
 }
 
-export type IReadTracksMetadataBatchResponseData = {
-  tracks: IReadTrackMetadataBatchItem[]
-  errors: IReadTrackMetadataBatchError[]
+export type IReadTracksMetadataResponseData = {
+  tracks: IReadTrackMetadataItem[]
+  errors: IReadTrackMetadataError[]
 }
 
 export type TTrackCoverMode = 'keep-per-track' | 'replace-all' | 'remove-all'
 
-export type IWriteTrackMetadataBatchItem = {
+export type IWriteTrackMetadataItem = {
   index: number
   metadata: TrackMetadataFormValues['metadata']
 }
