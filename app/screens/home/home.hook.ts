@@ -23,7 +23,15 @@ export type TrackItem = {
   status: 'selected' | 'reading' | 'read' | 'error'
 }
 
+type ReadTrackItem = TrackItem & {
+  metadata: TrackMetadataFormValues['metadata']
+  status: 'read'
+}
+
 let trackIdCounter = 0
+
+const isReadTrack = (track: TrackItem): track is ReadTrackItem =>
+  track.status === 'read' && track.metadata !== null
 
 const createTrackFromFile = (file: File, status: TrackItem['status'] = 'selected'): TrackItem => {
   trackIdCounter += 1
@@ -83,7 +91,7 @@ export function useHomeScreenHook() {
   const inputRef = useRef<HTMLInputElement>(null)
   const batchCoverInputRef = useRef<HTMLInputElement>(null)
 
-  const readTracks = useMemo(() => tracks.filter((track) => track.status === 'read'), [tracks])
+  const readTracks = useMemo(() => tracks.filter(isReadTrack), [tracks])
   const canSave =
     readTracks.length > 0 && (coverMode !== 'replace-all' || Boolean(batchCover?.file))
 
@@ -304,7 +312,7 @@ export function useHomeScreenHook() {
 
       setTracks((prev) =>
         prev.map((track) => {
-          if (!readTrackIds.includes(track.id)) {
+          if (!readTrackIds.includes(track.id) || !track.metadata) {
             return track
           }
 
